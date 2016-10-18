@@ -9,7 +9,7 @@ import akka.io.Tcp
 import akka.stream.actor.ActorPublisher
 import akka.util.ByteString
 import build.unstable.sonic.Exceptions.ProtocolException
-import build.unstable.sonic.client.Sonic
+import build.unstable.sonic.scaladsl.Sonic
 import build.unstable.sonic.model._
 import build.unstable.sonic.server.ServerLogging
 import build.unstable.tylog.Variation

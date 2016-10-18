@@ -1,18 +1,14 @@
-import com.typesafe.sbt.SbtGit.GitKeys._
 import sbt.Keys._
 import sbt._
 import sbtassembly.AssemblyKeys._
-import sbtassembly.{PathList, MergeStrategy}
-import sbtbuildinfo.BuildInfoKeys._
-import sbtbuildinfo.BuildInfoPlugin
-import sbtbuildinfo.BuildInfoPlugin._
+import sbtassembly.MergeStrategy
 import spray.revolver.RevolverPlugin._
 
 object Build extends sbt.Build {
 
   val scalaV = "2.11.8"
   val akkaV = "2.4.11"
-  val sonicV = "0.6.3"
+  val sonicV = "0.6.4"
 
   val commonSettings = Seq(
     organization := "build.unstable",
@@ -45,7 +41,7 @@ object Build extends sbt.Build {
       oldStrategy(x)
   }
 
-  val core: Project = Project("sonic", file("."))
+  val core: Project = Project("sonic-core", file("."))
     .settings(commonSettings: _*)
     .settings(
       libraryDependencies ++= {

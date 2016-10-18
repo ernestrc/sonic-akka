@@ -1,15 +1,13 @@
-package build.unstable.sonicd.examples
+package build.unstable.sonic.examples
 
 import java.net.InetSocketAddress
 import java.util.UUID
 
-import akka.Done
 import akka.actor._
-import akka.stream.scaladsl.{Keep, Sink}
+import akka.stream.scaladsl.{Sink, Source}
 import akka.stream.{ActorMaterializer, ActorMaterializerSettings}
 import akka.util.Timeout
-import build.unstable.sonic._
-import build.unstable.sonic.client.Sonic
+import build.unstable.sonic.scaladsl.Sonic
 import build.unstable.sonic.model.{Query, SonicMessage}
 import spray.json._
 
@@ -19,7 +17,7 @@ import scala.concurrent.{Await, Future}
 /**
  * Makes use of `sonicd-core` artifact which provides a streaming and futures API
  */
-object AkkaExample extends App {
+object ScalaExample extends App {
 
   implicit val system = ActorSystem()
   implicit val timeout: Timeout = 15.seconds
@@ -42,7 +40,7 @@ object AkkaExample extends App {
 
     val source = client.stream(query)
     val sink = Sink.ignore
-    val res: Cancellable = source.to(sink).run()
+    val res: Cancellable = Source.fromGraph(source).to(sink).run()
 
     res.cancel()
 
