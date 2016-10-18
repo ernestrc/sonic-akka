@@ -1,0 +1,7 @@
+target/
+.cache
+.idea
+.classpath
+.project
+.settings
+./src
