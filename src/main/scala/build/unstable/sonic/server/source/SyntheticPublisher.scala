@@ -13,23 +13,18 @@ import scala.collection.mutable
 import scala.concurrent.duration._
 import scala.util.{Random, Try}
 
-class SyntheticSource(query: Query, actorContext: ActorContext, context: RequestContext)
-  extends DataSource(query, actorContext, context) {
-
-  val publisher: Props = {
-    val seed = getOption[Int]("seed")
-    val size = getOption[Int]("size")
-    val progress = getOption[Int]("progress-delay").getOrElse(10)
-    val indexed = getOption[Boolean]("indexed").getOrElse(false)
-
-    //user pre-defined schema
-    val schema = getOption[JsObject]("schema")
-
-    Props(classOf[SyntheticPublisher], seed, size,
-      progress, query.query, indexed, schema, context)
-  }
-}
-
+/**
+  * Synthetic SonicMessage publisher
+  *
+  * @param seed         random number generator seed
+  * @param size         number of synthetic data points to be emitted
+  * @param progressWait Thread.sleep milliseconds to wait between emitting query progress.
+  *                     A total of 100 progress messages will be emitted, so totalDelay = progressWait * 100
+  * @param query        if size is not configured, the publisher will try to parse the query as an integer
+  *                     and use it as the stream size.
+  * @param indexed      whether output should contain an index column
+  * @param schema       schema to be used for the synthetic stream. Overrides index if both are set.
+  */
 class SyntheticPublisher(seed: Option[Int], size: Option[Int], progressWait: Int,
                          query: String, indexed: Boolean, schema: Option[JsObject])(implicit ctx: RequestContext)
   extends Actor with ActorPublisher[SonicMessage] with ServerLogging {
@@ -46,11 +41,11 @@ class SyntheticPublisher(seed: Option[Int], size: Option[Int], progressWait: Int
   val preTarget = 101
   //+100 of progress +1 metadata
   lazy val _query = Try(query.trim().toInt)
-  val target = size.orElse{
+  val target = size.orElse {
     _query
       .recoverWith {
         case e: Exception ⇒
-          log.warning( "could not parse query to determine test target size and size parameter was not passed")
+          log.warning("could not parse query to determine test target size and size parameter was not passed")
           Try(size.get)
       }.toOption
   }.map(_ + preTarget)
@@ -67,7 +62,7 @@ class SyntheticPublisher(seed: Option[Int], size: Option[Int], progressWait: Int
   // pass query or size '28'
   val shouldThrowExpectedException = _query.isSuccess && _query.get == 28
 
-  if (shouldThrowExpectedException) log.warning( "this source will throw an expected exception")
+  if (shouldThrowExpectedException) log.warning("this source will throw an expected exception")
 
   // if string is empty, value is 0 or bool is true, randomize values
   // otherwise use the value provided in the schema

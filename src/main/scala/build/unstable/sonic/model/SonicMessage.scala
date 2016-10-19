@@ -197,7 +197,7 @@ object SonicMessage {
       case Some(`query`) ⇒
         val p = pay.get.asJsObject.fields
         val traceId = p.get("trace_id").flatMap(_.convertTo[Option[String]])
-        val auth = p.get("auth") map(_.convertTo[AuthConfig])
+        val auth = p.get("auth") map (_.convertTo[AuthConfig])
         new Query(None, traceId, auth, vari.get, p("config"))
       case Some(`completed`) ⇒ StreamCompleted(pay.get.asJsObject.fields("trace_id").convertTo[String], vari.map(fromStackTrace))
       case Some(e) ⇒ throw new Exception(s"unexpected event type '$e'")
@@ -214,7 +214,7 @@ class Query(val id: Option[Long],
             val traceId: Option[String],
             val auth: Option[AuthConfig],
             val query: String,
-            _config: JsValue)
+            val config: JsValue)
   extends SonicCommand {
 
   override def setTraceId(trace_id: String): SonicCommand =
@@ -223,7 +223,7 @@ class Query(val id: Option[Long],
   override val variation: Option[String] = Some(query)
   override val payload: Option[JsValue] = {
     val fields = scala.collection.mutable.Map(
-      "config" → _config
+      "config" → config
     )
     auth.foreach(j ⇒ fields.update("auth", j.toJson))
     traceId.foreach(t ⇒ fields.update("trace_id", JsString(t)))
@@ -231,27 +231,10 @@ class Query(val id: Option[Long],
   }
   override val eventType: String = SonicMessage.query
 
-  //CAUTION: leaking this value outside of sonicd-server is a major security risk
-  private[unstable] lazy val config = _config match {
-    case o: JsObject ⇒ o
-    case JsString(alias) ⇒ Try {
-      ConfigFactory.load().getObject(s"sonicd.source.$alias")
-        .render(ConfigRenderOptions.concise()).parseJson.asJsObject
-    }.recover {
-      case e: Exception ⇒ throw new Exception(s"could not load query config '$alias'", e)
-    }.get
-    case _ ⇒
-      throw new Exception("'config' key in query config can only be either a full config " +
-        "object or an alias (string) that will be extracted by sonicd server")
-  }
-
-  private[unstable] lazy val clazzName: String = config.fields.getOrElse("class",
-    throw new Exception(s"missing key 'class' in config")).convertTo[String]
-
   override def toString: String = s"Query(id=$id,trace_id=$traceId)"
 
   def copy(query_id: Option[Long] = None, trace_id: Option[String] = None) =
-    new Query(query_id orElse id, trace_id orElse traceId, auth, query, _config)
+    new Query(query_id orElse id, trace_id orElse traceId, auth, query, config)
 }
 
 object Query {

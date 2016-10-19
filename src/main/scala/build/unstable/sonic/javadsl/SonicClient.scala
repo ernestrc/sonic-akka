@@ -15,7 +15,7 @@ import scala.collection.JavaConversions
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 
-object SonicClient {
+private[unstable] object SonicClient {
   def convertToJava[T](x: scala.concurrent.Future[T], cancelFn: Boolean ⇒ Boolean): Future[T] =
     new Future[T] {
 

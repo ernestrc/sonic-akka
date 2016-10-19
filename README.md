@@ -29,8 +29,7 @@ class SonicServer(implicit system: ActorSystem) {
   // obtain a reference to the IO manager actor for Tcp
   val tcpIoService: ActorRef = IO(Tcp)
 
-  // create a new controller
-  // which needs to handle NewCommand
+  // create a new controller which will handle NewCommand
   val controller: ActorRef = actor(new Act {
     become {
       // tcp handler expects a reply with token: String or Failure(e)
