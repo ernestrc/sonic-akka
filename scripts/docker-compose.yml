@@ -1,0 +1,8 @@
+sonicd:
+  image: xarxa6/sonicd
+  ports:
+    - "10002:10001"
+    - "9112:9111"
+  volumes:
+    - ./test_lib/:/var/lib/sonicd/
+    - ./test_conf/:/etc/sonicd

@@ -17,7 +17,7 @@ import scala.concurrent.Future
 
 object Sonic {
 
-  private[sonic] def collectToken(traceId: String) = { messages: Vector[SonicMessage] ⇒
+  private[unstable] def collectToken(traceId: String) = { messages: Vector[SonicMessage] ⇒
     messages.collectFirst {
       case OutputChunk(JsArray(Vector(JsString(token)))) ⇒ Future.successful(token)
     }.getOrElse {
@@ -26,17 +26,17 @@ object Sonic {
     }
   }
 
-  private[sonic] def sonicSupervisorProps(addr: InetSocketAddress): Props =
+  private[unstable] def sonicSupervisorProps(addr: InetSocketAddress): Props =
     Props(classOf[SonicSupervisor], addr)
 
   //length prefix framing
-  private[sonic] def lengthPrefixEncode(bytes: ByteString): ByteString = {
+  private[unstable] def lengthPrefixEncode(bytes: ByteString): ByteString = {
     val len = ByteBuffer.allocate(4)
     len.putInt(bytes.length)
     ByteString(len.array() ++ bytes)
   }
 
-  private[sonic] val fold = Sink.fold[Vector[SonicMessage], SonicMessage](Vector.empty[SonicMessage])((a, e) ⇒ a :+ e)
+  private[unstable] val fold = Sink.fold[Vector[SonicMessage], SonicMessage](Vector.empty[SonicMessage])((a, e) ⇒ a :+ e)
 
   case class Client(address: InetSocketAddress)(implicit system: ActorSystem, mat: Materializer) {
 

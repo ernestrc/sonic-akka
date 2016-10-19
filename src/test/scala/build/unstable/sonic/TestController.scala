@@ -1,4 +1,4 @@
-package build.unstable.sonicd.model
+package build.unstable.sonic
 
 import akka.actor.{Actor, ActorRef, OneForOneStrategy, SupervisorStrategy}
 import build.unstable.sonic.client.ClientLogging

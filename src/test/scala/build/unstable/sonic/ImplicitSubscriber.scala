@@ -1,4 +1,4 @@
-package build.unstable.sonicd.model
+package build.unstable.sonic
 
 import akka.testkit.ImplicitSender
 import build.unstable.sonic.model.SonicMessage
