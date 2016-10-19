@@ -27,7 +27,7 @@ class IntegrationSpec extends WordSpec with Matchers with ScalatestRouteTest
   import scala.collection.JavaConversions._
 
   def toJWTClaims(user: String, authorization: Int, mode: String,
-                  from: List[InetAddress] = List.empty): java.util.Map[String, AnyRef] = {
+                  from: List[String] = List.empty): java.util.Map[String, AnyRef] = {
     val claims = scala.collection.mutable.Map[String, AnyRef](
       "authorization" → authorization.toString,
       "user" → user,
@@ -35,9 +35,7 @@ class IntegrationSpec extends WordSpec with Matchers with ScalatestRouteTest
     )
 
     //encode allowed ips with token
-    from.foreach { ips ⇒
-      claims.update("from", ips.toJson.compactPrint)
-    }
+    if (from.nonEmpty) claims.update("from", from.toJson.compactPrint)
     claims
   }
 
@@ -150,7 +148,7 @@ class IntegrationSpec extends WordSpec with Matchers with ScalatestRouteTest
     }
 
     "accept a query of a source that requires authentication and has a whitelist of ips and user ip is in the list" in {
-      val token: AuthConfig = SonicdAuth(signer.sign(toJWTClaims("bandit", 6, "r", InetAddress.getByName("127.0.0.1") :: Nil)))
+      val token: AuthConfig = SonicdAuth(signer.sign(toJWTClaims("bandit", 6, "r", "localhost" :: Nil)))
       val syntheticQuery = Query("10", JsString("secure_server_config"), Some(token))
       val future: Future[Vector[SonicMessage]] = client.run(syntheticQuery)
 
@@ -159,7 +157,7 @@ class IntegrationSpec extends WordSpec with Matchers with ScalatestRouteTest
     }
 
     "reject a query of a source that requires authentication and has a whitelist of ips but user ip is not in the list" in {
-      val token = SonicdAuth(signer.sign(toJWTClaims("jkerl", 6, "r", InetAddress.getByName("192.168.1.17") :: Nil)))
+      val token = SonicdAuth(signer.sign(toJWTClaims("jkerl", 6, "r", "192.168.1.17" :: Nil)))
       val syntheticQuery = Query("10", JsString("secure_server_config"), Some(token))
       val future: Future[Vector[SonicMessage]] = client.run(syntheticQuery)
 

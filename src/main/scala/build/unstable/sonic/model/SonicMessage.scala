@@ -250,13 +250,6 @@ class Query(val id: Option[Long],
 
   override def toString: String = s"Query(id=$id,trace_id=$traceId)"
 
-  private[unstable] def getSourceClass: Class[_] = {
-    val clazzLoader = this.getClass.getClassLoader
-
-    Try(clazzLoader.loadClass(clazzName))
-      .getOrElse(clazzLoader.loadClass("build.unstable.sonicd.source." + clazzName))
-  }
-
   def copy(query_id: Option[Long] = None, trace_id: Option[String] = None) =
     new Query(query_id orElse id, trace_id orElse traceId, auth, query, _config)
 }

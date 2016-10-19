@@ -6,3 +6,4 @@ sonicd:
   volumes:
     - ./test_lib/:/var/lib/sonicd/
     - ./test_conf/:/etc/sonicd
+  net: host
