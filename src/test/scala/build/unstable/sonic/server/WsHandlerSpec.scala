@@ -13,7 +13,7 @@ import build.unstable.sonic.model._
 import build.unstable.sonic.server.system.WsHandler
 import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpecLike}
 
-import scala.util.{Failure, Success}
+import scala.util.Failure
 
 class WsHandlerSpec(_system: ActorSystem) extends TestKit(_system)
 with WordSpecLike with Matchers with BeforeAndAfterAll with ImplicitSender
@@ -30,7 +30,7 @@ with ImplicitSubscriber with ImplicitGuardian {
   def newHandler(): TestActorRef[WsHandler] = {
     val wsHandler =
       TestActorRef[WsHandler](
-      Props(classOf[WsHandler], self, self, Some(InetAddress.getLocalHost))
+      Props(classOf[WsHandler], self, Some(InetAddress.getLocalHost))
         .withDispatcher(CallingThreadDispatcher.Id))
 
     ActorPublisher.apply[SonicMessage](wsHandler).subscribe(subs)
@@ -69,10 +69,10 @@ with ImplicitSubscriber with ImplicitGuardian {
   def newMaterializedHandler(props: Props): TestActorRef[WsHandler] = {
     val wsHandler = newHandler()
     wsHandler ! OnNext(syntheticQuery)
-    val q = expectMsgType[NewQuery]
+    val q = expectMsgType[NewCommand]
 
     //make sure that traceId is injected
-    assert(q.query.traceId.nonEmpty)
+    assert(q.command.traceId.nonEmpty)
 
     wsHandler ! props
     wsHandler
@@ -85,13 +85,13 @@ with ImplicitSubscriber with ImplicitGuardian {
       wsHandler ! Request(1)
       wsHandler ! OnNext(Authenticate("serrallonga", "a", None))
 
-      val q = expectMsgType[Authenticate]
-      assert(q.traceId.nonEmpty)
+      val q = expectMsgType[NewCommand]
+      assert(q.command.traceId.nonEmpty)
 
-      val done = Success("token")
+      val done = "token"
       wsHandler ! done
       wsHandler ! Request(1)
-      expectMsg(OutputChunk(Vector(done.get)))
+      expectMsg(OutputChunk(Vector(done)))
       wsHandler ! Request(1)
       val d = expectMsgType[StreamCompleted]
       assert(d.success)
@@ -107,8 +107,8 @@ with ImplicitSubscriber with ImplicitGuardian {
       wsHandler ! Request(1)
       wsHandler ! OnNext(Authenticate("serrallonga", "a", None))
 
-      val q = expectMsgType[Authenticate]
-      assert(q.traceId.nonEmpty)
+      val q = expectMsgType[NewCommand]
+      assert(q.command.traceId.nonEmpty)
 
       val done: Failure[String] = Failure(new Exception("BOOM"))
       wsHandler ! done
@@ -127,11 +127,13 @@ with ImplicitSubscriber with ImplicitGuardian {
 
       wsHandler ! OnNext(syntheticQuery)
 
-      val q = expectMsgType[NewQuery]
-      assert(q.query.traceId.nonEmpty)
+      val q = expectMsgType[NewCommand]
+      assert(q.command.traceId.nonEmpty)
 
-      val done = StreamCompleted.error("trace-id", new Exception("BOOM"))
-      wsHandler ! done
+      val e = new Exception("BOOM")
+      val failure = Failure(e)
+      val done = StreamCompleted.error(syntheticQuery.traceId.get, e)
+      wsHandler ! failure
       wsHandler ! Request(1)
       expectMsg(done)
 
@@ -141,19 +143,21 @@ with ImplicitSubscriber with ImplicitGuardian {
     }
 
     "not call onComplete twice (respect ReactiveStreams rules)" in {
-      val wsHandler = guardian.underlying.actor.context.actorOf(Props(classOf[WsHandler], self, self, None)
+      val wsHandler = guardian.underlying.actor.context.actorOf(Props(classOf[WsHandler], self, None)
         .withDispatcher(CallingThreadDispatcher.Id))
 
       ActorPublisher.apply[SonicMessage](wsHandler).subscribe(subs)
 
       wsHandler ! OnNext(syntheticQuery)
 
-      val q = expectMsgType[NewQuery]
-      assert(q.query.traceId.nonEmpty)
+      val q = expectMsgType[NewCommand]
+      assert(q.command.traceId.nonEmpty)
 
       subscription.request(1)
-      val done = StreamCompleted.error("trace-id", new Exception("BOOM"))
-      wsHandler ! done
+      val e = new Exception("BOOM")
+      val failure = Failure(e)
+      val done = StreamCompleted.error(syntheticQuery.traceId.get, e)
+      wsHandler ! failure
       expectMsg(done)
 
       wsHandler ! PoisonPill
@@ -325,7 +329,7 @@ with ImplicitSubscriber with ImplicitGuardian {
       //1st query
       {
         wsHandler ! OnNext(syntheticQuery)
-        expectMsgType[NewQuery]
+        expectMsgType[NewCommand]
 
         wsHandler ! zombiePubProps
 
@@ -344,7 +348,7 @@ with ImplicitSubscriber with ImplicitGuardian {
       //2c nd query
       {
         wsHandler ! OnNext(syntheticQuery)
-        expectMsgType[NewQuery]
+        expectMsgType[NewCommand]
 
         wsHandler ! zombiePubProps
 
@@ -364,7 +368,7 @@ with ImplicitSubscriber with ImplicitGuardian {
       {
         wsHandler ! OnNext(syntheticQuery)
         wsHandler ! OnNext(syntheticQuery)
-        expectMsgType[NewQuery]
+        expectMsgType[NewCommand]
 
         wsHandler ! zombiePubProps
 
@@ -381,7 +385,7 @@ with ImplicitSubscriber with ImplicitGuardian {
 
         //--
 
-        expectMsgType[NewQuery]
+        expectMsgType[NewCommand]
         wsHandler ! zombiePubProps
 
         wsHandler ! Request(1)

@@ -17,7 +17,7 @@ import org.slf4j.event.Level
 import scala.util.control.NonFatal
 import scala.util.{Failure, Success}
 
-class WsHandler(controller: ActorRef, authService: ActorRef, clientAddress: Option[InetAddress]) extends ActorPublisher[SonicMessage]
+class WsHandler(controller: ActorRef, clientAddress: Option[InetAddress]) extends ActorPublisher[SonicMessage]
   with ActorSubscriber with ServerLogging with Stash {
 
   import akka.stream.actor.ActorPublisherMessage._
@@ -198,32 +198,28 @@ class WsHandler(controller: ActorRef, authService: ActorRef, clientAddress: Opti
 
     case OnNext(CancelStream) ⇒ context.become(completing(StreamCompleted.success(traceId)))
 
-    //auth cmd failed
-    case Failure(e) ⇒
-      log.tylog(Level.INFO, traceId, waitingFor, Variation.Failure(e), "")
-      context.become(completing(StreamCompleted.error(traceId, e)))
-
-    //auth cmd succeded
-    case Success(token: String) ⇒
-      log.tylog(Level.INFO, traceId, waitingFor, Variation.Success, "received new token '{}'", token)
-      onNext(OutputChunk(Vector(token)))
-      context.become(completing(StreamCompleted.success(traceId)))
-
-    case s: Subscription ⇒
-      log.tylog(Level.INFO, traceId, waitingFor, Variation.Success, "materialized source and subscribed to it")
-      subscription = new StreamSubscription(s)
-      requestTil()
-      context.become(materialized)
-
     case handlerProps: Props ⇒
       log.debug("received props {}", handlerProps)
       handler = context.actorOf(handlerProps)
       val pub = ActorPublisher[SonicMessage](handler)
       pub.subscribe(subs)
 
-    case msg: StreamCompleted ⇒
-      log.tylog(Level.INFO, traceId, waitingFor, Variation.Failure(msg.error.get), "error materializing source")
-      context.become(completing(msg))
+    //auth cmd succeded
+    case token: String ⇒
+      log.tylog(Level.INFO, traceId, waitingFor, Variation.Success, "received new token '{}'", token)
+      onNext(OutputChunk(Vector(token)))
+      context.become(completing(StreamCompleted.success(traceId)))
+
+    //auth cmd failed
+    case Failure(e) ⇒
+      log.tylog(Level.INFO, traceId, waitingFor, Variation.Failure(e), "failed to process new command")
+      context.become(completing(StreamCompleted.error(traceId, e)))
+
+    case s: Subscription ⇒
+      log.tylog(Level.INFO, traceId, waitingFor, Variation.Success, "materialized source and subscribed to it")
+      subscription = new StreamSubscription(s)
+      requestTil()
+      context.become(materialized)
 
   }
 
@@ -248,19 +244,17 @@ class WsHandler(controller: ActorRef, authService: ActorRef, clientAddress: Opti
           case None ⇒ i.setTraceId(traceId)
         }
       }
-      withTraceId match {
-        case q: Query ⇒
-          waitingFor = MaterializeSource
-          log.tylog(Level.INFO, withTraceId.traceId.get, waitingFor, Variation.Attempt, "processing query {}", q)
 
-          controller ! NewQuery(q, clientAddress)
-
-        case a: Authenticate ⇒
-          waitingFor = GenerateToken
-          log.tylog(Level.INFO, withTraceId.traceId.get, waitingFor, Variation.Attempt, "processing authenticate cmd {}", a)
-
-          authService ! a
+      // for logging
+      waitingFor = withTraceId match {
+        case q: Query ⇒ MaterializeSource
+        case a: Authenticate ⇒ GenerateToken
       }
+
+      log.tylog(Level.INFO, withTraceId.traceId.get, waitingFor,
+        Variation.Attempt, "deserialized command {}", withTraceId)
+
+      controller ! NewCommand(withTraceId, clientAddress)
       context.become(waiting(withTraceId.traceId.get))
 
     case OnNext(msg) ⇒

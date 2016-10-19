@@ -25,12 +25,12 @@ class SyntheticSource(query: Query, actorContext: ActorContext, context: Request
     //user pre-defined schema
     val schema = getOption[JsObject]("schema")
 
-    Props(classOf[SyntheticPublisher], query.id.get, seed, size,
+    Props(classOf[SyntheticPublisher], seed, size,
       progress, query.query, indexed, schema, context)
   }
 }
 
-class SyntheticPublisher(queryId: Long, seed: Option[Int], size: Option[Int], progressWait: Int,
+class SyntheticPublisher(seed: Option[Int], size: Option[Int], progressWait: Int,
                          query: String, indexed: Boolean, schema: Option[JsObject])(implicit ctx: RequestContext)
   extends Actor with ActorPublisher[SonicMessage] with ServerLogging {
 

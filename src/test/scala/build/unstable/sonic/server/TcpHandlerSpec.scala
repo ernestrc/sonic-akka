@@ -1,4 +1,4 @@
-package build.unstable.sonicd.service
+package build.unstable.sonic.server
 
 import java.net.InetAddress
 
@@ -13,7 +13,7 @@ import build.unstable.sonic.server.system.TcpHandler
 import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpecLike}
 
 import scala.concurrent.duration._
-import scala.util.Success
+import scala.util.Failure
 
 class MockController(msg: Any) extends Actor {
 
@@ -23,7 +23,9 @@ class MockController(msg: Any) extends Actor {
   override def receive: Receive = {
     case Terminated(ref) ⇒
       isTerminated = true
-    case query: NewQuery ⇒
+      // delegate success/failure to test cases
+    case cmd: Authenticate ⇒
+    case query: NewCommand ⇒
       isMaterialized = true
       sender() ! msg
       context watch sender()
@@ -65,14 +67,14 @@ with WordSpecLike with Matchers with BeforeAndAfterAll with ImplicitSender {
 
     val tcpHandler =
       TestActorRef[TcpHandler](Props(classOf[TcpHandler],
-      controller, self, connection, InetAddress.getLocalHost), "tcpHandler" + name)
+      controller, connection, InetAddress.getLocalHost), "tcpHandler" + name)
 
     (controller, connection, tcpHandler)
   }
 
   def newHandler: TestActorRef[TcpHandler] = {
     TestActorRef[TcpHandler](
-      Props(classOf[TcpHandler], self, self, self, InetAddress.getLocalHost)
+      Props(classOf[TcpHandler], self, self, InetAddress.getLocalHost)
       .withDispatcher(CallingThreadDispatcher.Id))
   }
 
@@ -82,11 +84,11 @@ with WordSpecLike with Matchers with BeforeAndAfterAll with ImplicitSender {
     expectMsg(Tcp.ResumeReading)
 
     tcpHandler ! Tcp.Received(queryBytes)
-    val q = expectMsgType[NewQuery]
+    val q = expectMsgType[NewCommand]
     expectMsg(Tcp.ResumeReading)
 
     //make sure that traceId is injected
-    assert(q.query.traceId.nonEmpty)
+    assert(q.command.traceId.nonEmpty)
 
     tcpHandler ! props
     tcpHandler
@@ -161,11 +163,13 @@ with WordSpecLike with Matchers with BeforeAndAfterAll with ImplicitSender {
     expectMsg(Tcp.ResumeReading)
     tcpHandler ! Tcp.Received(queryBytes)
 
-    expectMsgType[NewQuery]
+    expectMsgType[NewCommand]
 
-    val done = StreamCompleted.error(new Exception("oops"))
+    val e = new Exception("")
+    val failure = Failure(e)
+    val done = StreamCompleted(syntheticQuery.traceId.get, Some(e))
 
-    tcpHandler ! done
+    tcpHandler ! failure
 
     val ack = TcpHandler.Ack(1)
     expectMsg(Tcp.ResumeReading)
@@ -459,7 +463,7 @@ with WordSpecLike with Matchers with BeforeAndAfterAll with ImplicitSender {
     expectMsg(Tcp.ResumeReading)
 
     tcpHandler ! Tcp.Received(queryBytes)
-    expectMsgType[NewQuery]
+    expectMsgType[NewCommand]
     expectMsg(Tcp.ResumeReading)
 
     tcpHandler ! syntheticPubProps
@@ -474,7 +478,7 @@ with WordSpecLike with Matchers with BeforeAndAfterAll with ImplicitSender {
     tcpHandler ! Tcp.Received(queryBytes)
 
     //1st query
-    expectMsgType[NewQuery]
+    expectMsgType[NewCommand]
     expectMsg(Tcp.ResumeReading)
     //2nd query framed
     expectMsg(Tcp.ResumeReading)
@@ -485,7 +489,7 @@ with WordSpecLike with Matchers with BeforeAndAfterAll with ImplicitSender {
     expectMsg(Tcp.ResumeReading)
 
     //2nd query
-    expectMsgType[NewQuery]
+    expectMsgType[NewCommand]
     //2nd query framed again, due to stashing first time
     expectMsg(Tcp.ResumeReading)
     tcpHandler ! syntheticPubProps
@@ -505,19 +509,19 @@ with WordSpecLike with Matchers with BeforeAndAfterAll with ImplicitSender {
     expectMsg(Tcp.ResumeReading)
     tcpHandler ! Tcp.Received(qChunk2)
 
-    val withTraceId = expectMsgType[Authenticate]
+    val withTraceId = expectMsgType[NewCommand]
     expectMsg(Tcp.ResumeReading)
 
-    assert(withTraceId.traceId.nonEmpty)
+    assert(withTraceId.command.traceId.nonEmpty)
 
-    tcpHandler ! Success("token")
+    tcpHandler ! "token"
 
     val out = OutputChunk(Vector("token"))
     val ack = TcpHandler.Ack(1)
     expectMsg(Tcp.Write(Sonic.lengthPrefixEncode(out.toBytes), ack))
     tcpHandler ! ack
 
-    val done = StreamCompleted.success(withTraceId.traceId.get)
+    val done = StreamCompleted.success(withTraceId.command.traceId.get)
 
     val ack2 = TcpHandler.Ack(2)
     expectMsg(Tcp.Write(Sonic.lengthPrefixEncode(done.toBytes), ack2))
