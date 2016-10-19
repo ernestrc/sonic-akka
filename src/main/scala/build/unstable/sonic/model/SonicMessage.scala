@@ -197,7 +197,7 @@ object SonicMessage {
       case Some(`query`) ⇒
         val p = pay.get.asJsObject.fields
         val traceId = p.get("trace_id").flatMap(_.convertTo[Option[String]])
-        val auth = p.get("auth") map (_.convertTo[AuthConfig])
+        val auth = p.get("auth") flatMap (_.convertTo[Option[AuthConfig]])
         new Query(None, traceId, auth, vari.get, p("config"))
       case Some(`completed`) ⇒ StreamCompleted(pay.get.asJsObject.fields("trace_id").convertTo[String], vari.map(fromStackTrace))
       case Some(e) ⇒ throw new Exception(s"unexpected event type '$e'")
