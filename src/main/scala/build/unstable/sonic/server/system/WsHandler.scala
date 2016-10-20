@@ -30,7 +30,7 @@ class WsHandler(controller: ActorRef, clientAddress: Option[InetAddress]) extend
   override def supervisorStrategy: SupervisorStrategy = OneForOneStrategy() {
     case e: Exception ⇒
       log.error(e, "error in publisher")
-      self ! StreamCompleted.error(traceId, e)
+      self ! Failure(e)
       Stop
   }
 
@@ -79,7 +79,7 @@ class WsHandler(controller: ActorRef, clientAddress: Option[InetAddress]) extend
 
     override def onError(t: Throwable): Unit = {
       log.error(t, "publisher called onError of wsHandler")
-      self ! StreamCompleted.error(traceId, t)
+      self ! Failure(t)
     }
 
     override def onSubscribe(s: Subscription): Unit = self ! s
@@ -167,7 +167,9 @@ class WsHandler(controller: ActorRef, clientAddress: Option[InetAddress]) extend
 
     case msg@Request(n) ⇒ requestTil()
 
-    case msg: StreamCompleted ⇒ context.become(completing(msg))
+    case Failure(e) ⇒ context.become(completing(StreamCompleted.error(traceId, e)))
+
+    case s: StreamCompleted ⇒ context.become(completing(s))
 
     case msg: SonicMessage ⇒
       try {

@@ -20,7 +20,7 @@ class QueryEndpoint(controller: ActorRef, authService: ActorRef, responseTimeout
 
   def wsFlowHandler(clientAddress: RemoteAddress): Flow[SonicMessage, SonicMessage, Any] = {
 
-    val wsHandler = system.actorOf(Props(classOf[WsHandler], controller, authService, clientAddress.toOption))
+    val wsHandler = system.actorOf(Props(classOf[WsHandler], controller, clientAddress.toOption))
     Flow.fromSinkAndSource[SonicMessage, SonicMessage](
       Sink.fromSubscriber(ActorSubscriber(wsHandler)),
       Source.fromPublisher[SonicMessage](ActorPublisher(wsHandler))
