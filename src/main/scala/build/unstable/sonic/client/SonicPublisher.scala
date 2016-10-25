@@ -195,9 +195,8 @@ class SonicPublisher(supervisor: ActorRef, command: SonicCommand, isClient: Bool
     }
   }
 
-  // halfReady signals when one of the async events (Connected, Request)
-  // that we're waiting for has been received already
   def idle: Receive = commonBehaviour orElse {
+    case f: StreamCompleted ⇒ context.become(terminating(f))
 
     case f@Tcp.CommandFailed(_: Connect) ⇒
       log.tylog(Level.DEBUG, traceId, CreateTcpConnection,

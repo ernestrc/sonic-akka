@@ -14,8 +14,8 @@ import build.unstable.tylog.Variation
 import org.reactivestreams._
 import org.slf4j.event.Level
 
+import scala.util.Failure
 import scala.util.control.NonFatal
-import scala.util.{Failure, Success}
 
 class WsHandler(controller: ActorRef, clientAddress: Option[InetAddress]) extends ActorPublisher[SonicMessage]
   with ActorSubscriber with ServerLogging with Stash {

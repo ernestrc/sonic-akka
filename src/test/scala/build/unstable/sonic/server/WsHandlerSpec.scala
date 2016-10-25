@@ -10,6 +10,7 @@ import akka.testkit.{CallingThreadDispatcher, ImplicitSender, TestActorRef, Test
 import build.unstable.sonic.ImplicitSubscriber
 import build.unstable.sonic.JsonProtocol._
 import build.unstable.sonic.model._
+import build.unstable.sonic.server.source.SyntheticPublisher
 import build.unstable.sonic.server.system.WsHandler
 import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpecLike}
 
@@ -122,7 +123,7 @@ with ImplicitSubscriber with ImplicitGuardian {
       expectMsg("complete")
     }
 
-    "handle error event when controller fails to instantiate publisher" in {
+    "handle error event when controller fails to instantiate source class" in {
       val wsHandler = newHandler()
 
       wsHandler ! OnNext(syntheticQuery)
@@ -136,6 +137,32 @@ with ImplicitSubscriber with ImplicitGuardian {
       wsHandler ! failure
       wsHandler ! Request(1)
       expectMsg(done)
+
+      clientAcknowledge(wsHandler)
+      wsHandler ! PoisonPill
+      expectMsg("complete")
+    }
+
+    "should complete stream with error if peer publisher handler terminates unexpectedly" in {
+      val wsHandler = newHandler()
+      val queryThatTriggersUnexpectedFailure = "-1"
+      val syntheticQuery = Query(queryThatTriggersUnexpectedFailure, config, None).copy(query_id = Some(1), trace_id = Some(traceId))
+      val syntheticPubProps = Props(classOf[SyntheticPublisher], None, Some(1), 10, queryThatTriggersUnexpectedFailure, false, None, testCtx)
+        .withDispatcher(CallingThreadDispatcher.Id)
+
+      wsHandler ! OnNext(syntheticQuery)
+
+      val q = expectMsgType[NewCommand]
+      assert(q.command.traceId.nonEmpty)
+
+      wsHandler ! syntheticPubProps
+      wsHandler ! Request(1)
+
+      val done = expectMsgType[StreamCompleted]
+
+      val error = done.asInstanceOf[StreamCompleted].error
+
+      error.get.toString.contains("ActorInitializationException") shouldBe true
 
       clientAcknowledge(wsHandler)
       wsHandler ! PoisonPill

@@ -12,7 +12,7 @@ import build.unstable.sonic.model.{SonicMessage, StreamCompleted}
 import build.unstable.sonic.server.system.WsHandler
 import ch.megard.akka.http.cors.CorsDirectives
 
-class QueryEndpoint(controller: ActorRef, authService: ActorRef, responseTimeout: Timeout, actorTimeout: Timeout)
+class QueryEndpoint(controller: ActorRef, responseTimeout: Timeout, actorTimeout: Timeout)
                    (implicit val mat: ActorMaterializer, system: ActorSystem)
   extends CorsDirectives with EndpointUtils {
 

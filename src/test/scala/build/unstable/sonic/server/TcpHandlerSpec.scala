@@ -1,5 +1,6 @@
 package build.unstable.sonic.server
 
+import java.lang.reflect.InvocationTargetException
 import java.net.InetAddress
 
 import akka.actor._
@@ -9,6 +10,7 @@ import akka.util.ByteString
 import build.unstable.sonic.JsonProtocol._
 import build.unstable.sonic.model._
 import build.unstable.sonic.scaladsl.Sonic
+import build.unstable.sonic.server.source.SyntheticPublisher
 import build.unstable.sonic.server.system.TcpHandler
 import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpecLike}
 
@@ -23,7 +25,7 @@ class MockController(msg: Any) extends Actor {
   override def receive: Receive = {
     case Terminated(ref) ⇒
       isTerminated = true
-      // delegate success/failure to test cases
+    // delegate success/failure to test cases
     case cmd: Authenticate ⇒
     case query: NewCommand ⇒
       isMaterialized = true
@@ -47,7 +49,7 @@ class MockConnection extends Actor {
 }
 
 class TcpHandlerSpec(_system: ActorSystem) extends TestKit(_system)
-with WordSpecLike with Matchers with BeforeAndAfterAll with ImplicitSender {
+  with WordSpecLike with Matchers with BeforeAndAfterAll with ImplicitSender {
 
   import build.unstable.sonic.Fixture._
 
@@ -67,7 +69,7 @@ with WordSpecLike with Matchers with BeforeAndAfterAll with ImplicitSender {
 
     val tcpHandler =
       TestActorRef[TcpHandler](Props(classOf[TcpHandler],
-      controller, connection, InetAddress.getLocalHost), "tcpHandler" + name)
+        controller, connection, InetAddress.getLocalHost), "tcpHandler" + name)
 
     (controller, connection, tcpHandler)
   }
@@ -75,7 +77,7 @@ with WordSpecLike with Matchers with BeforeAndAfterAll with ImplicitSender {
   def newHandler: TestActorRef[TcpHandler] = {
     TestActorRef[TcpHandler](
       Props(classOf[TcpHandler], self, self, InetAddress.getLocalHost)
-      .withDispatcher(CallingThreadDispatcher.Id))
+        .withDispatcher(CallingThreadDispatcher.Id))
   }
 
   def newHandlerOnStreamingState(props: Props): TestActorRef[TcpHandler] = {
@@ -299,7 +301,7 @@ with WordSpecLike with Matchers with BeforeAndAfterAll with ImplicitSender {
 
   }
 
-  "should handle error event when controller fails to instantiate publisher" in {
+  "should handle error event when controller fails to instantiate source class" in {
 
     val tcpHandler = newHandler
     expectMsg(Tcp.ResumeReading)
@@ -315,6 +317,32 @@ with WordSpecLike with Matchers with BeforeAndAfterAll with ImplicitSender {
     expectMsg(w)
     tcpHandler ! ack
     tcpHandler.underlyingActor.storage.length shouldBe 0
+
+    clientAcknowledge(tcpHandler)
+  }
+
+  "should complete stream with error if peer publisher handler terminates unexpectedly" in {
+    val tcpHandler = newHandler
+    val queryThatTriggersUnexpectedFailure = "-1"
+    val syntheticQuery = Query(queryThatTriggersUnexpectedFailure, config, None).copy(query_id = Some(1), trace_id = Some(traceId))
+    val queryBytes = Sonic.lengthPrefixEncode(syntheticQuery.toBytes)
+    val syntheticPubProps = Props(classOf[SyntheticPublisher], None, Some(1), 10, queryThatTriggersUnexpectedFailure, false, None, testCtx)
+      .withDispatcher(CallingThreadDispatcher.Id)
+
+    expectMsg(Tcp.ResumeReading)
+
+    tcpHandler ! Tcp.Received(queryBytes)
+    val q = expectMsgType[NewCommand]
+    expectMsg(Tcp.ResumeReading)
+
+    tcpHandler ! syntheticPubProps
+
+    val doneWrite = expectMsgType[Tcp.Write]
+    val done = SonicMessage.fromBytes(doneWrite.data.splitAt(4)._2)
+
+    val error = done.asInstanceOf[StreamCompleted].error
+
+    error.get.toString.contains("ActorInitializationException") shouldBe true
 
     clientAcknowledge(tcpHandler)
   }
