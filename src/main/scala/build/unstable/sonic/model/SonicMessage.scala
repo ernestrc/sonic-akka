@@ -160,7 +160,7 @@ object SonicMessage {
   def unapply(ev: SonicMessage): Option[(String, Option[String], Option[JsValue])] =
     Some((ev.eventType, ev.variation, ev.payload))
 
-  def fromJson(raw: String): SonicMessage = try {
+  def fromJson(raw: String): SonicMessage = {
     val fields = raw.parseJson.asJsObject.fields
 
     val vari: Option[String] = fields.get(variation).flatMap(_.convertTo[Option[String]])
@@ -203,8 +203,6 @@ object SonicMessage {
       case Some(e) ⇒ throw new Exception(s"unexpected event type '$e'")
       case None ⇒ throw new Exception("no 'e' event_type")
     }
-  } catch {
-    case e: Exception ⇒ throw new Exception(s"error deserializing sonic message", e)
   }
 
   def fromBytes(b: ByteString): SonicMessage = fromJson(b.utf8String)
