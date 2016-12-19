@@ -1,3 +1,5 @@
 package build.unstable.sonic.model
 
-case class RequestContext(traceId: String, user: Option[ApiUser])
+import java.net.InetAddress
+
+case class RequestContext(traceId: String, user: Option[ApiUser], clientAddress: Option[InetAddress] = None)
