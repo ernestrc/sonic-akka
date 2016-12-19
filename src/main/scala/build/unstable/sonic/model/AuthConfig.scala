@@ -5,7 +5,7 @@ import spray.json._
 
 import scala.util.{Failure, Success, Try}
 
-private[unstable] trait AuthConfig {
+trait AuthConfig {
   val provider: Class[_]
   val config: Map[String, JsValue]
 }

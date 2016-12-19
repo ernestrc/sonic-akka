@@ -160,6 +160,7 @@ object SonicMessage {
   def unapply(ev: SonicMessage): Option[(String, Option[String], Option[JsValue])] =
     Some((ev.eventType, ev.variation, ev.payload))
 
+  // TODO improve error messages on vari.get and the like
   def fromJson(raw: String): SonicMessage = {
     val fields = raw.parseJson.asJsObject.fields
 

@@ -7,8 +7,9 @@ import spray.revolver.RevolverPlugin._
 object Build extends sbt.Build {
 
   val scalaV = "2.11.8"
-  val akkaV = "2.4.11"
-  val sonicV = "0.6.8"
+  val akkaV = "2.4.14"
+  val akkaHttpV = "10.0.0"
+  val sonicV = "0.6.9"
 
   val commonSettings = Seq(
     organization := "build.unstable",
@@ -51,9 +52,9 @@ object Build extends sbt.Build {
           "com.typesafe.akka" %% "akka-actor" % akkaV,
           "com.typesafe.akka" %% "akka-slf4j" % akkaV,
           "com.typesafe.akka" %% "akka-stream" % akkaV,
-          "com.typesafe.akka" %% "akka-http-spray-json-experimental" % akkaV,
-          "ch.megard" %% "akka-http-cors" % "0.1.2",
-          "com.typesafe.akka" %% "akka-http-testkit" % akkaV % "test",
+          "com.typesafe.akka" %% "akka-http-spray-json" % akkaHttpV,
+          "ch.megard" %% "akka-http-cors" % "0.1.10",
+          "com.typesafe.akka" %% "akka-http-testkit" % akkaHttpV % "test",
           "com.auth0" % "java-jwt" % "2.1.0" % "test",
           "org.scalatest" %% "scalatest" % "2.2.5" % "test"
         )
