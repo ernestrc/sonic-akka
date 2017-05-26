@@ -112,7 +112,7 @@ class IntegrationSpec extends WordSpec with Matchers with ScalatestRouteTest
       val e = intercept[Throwable] {
         Await.result(future, 20.seconds)
       }
-      assert(e.getCause.getMessage.contains("INVALID"))
+      assert(e.getCause.getMessage.toUpperCase.contains("INVALID"))
     }
 
     "reject a query of a source that requires authentication if user is unauthenticated" in {
