@@ -160,49 +160,64 @@ object SonicMessage {
   def unapply(ev: SonicMessage): Option[(String, Option[String], Option[JsValue])] =
     Some((ev.eventType, ev.variation, ev.payload))
 
-  // TODO improve error messages on vari.get and the like
-  def fromJson(raw: String): SonicMessage = {
-    val fields = raw.parseJson.asJsObject.fields
+  private def getField[T: JsonFormat](key: String, fields: Map[String, JsValue]): T = {
+    val field = fields
+      .getOrElse(key, throw new Exception(s"SonicMessage#getField: missing '$key'"))
 
-    val vari: Option[String] = fields.get(variation).flatMap(_.convertTo[Option[String]])
-    val pay: Option[JsValue] = fields.get(payload)
+    try {
+      field.convertTo[T]
+    } catch {
+      case _: Exception ⇒
+        throw new Exception(s"SonicMessage#getField: unexpected type for $key: $field")
+    }
+  }
 
-    fields.get(eventType).map(_.convertTo[String]) match {
-      case Some(`out`) ⇒ pay match {
-        case Some(d: JsArray) ⇒ OutputChunk(d)
-        case a ⇒ throw new Exception(s"expecting JsArray found $a")
+  private def getOptional[T: JsonFormat](key: String, fields: Map[String, JsValue]): Option[T] = {
+    fields.get(key).flatMap { field ⇒
+      try {
+        field.convertTo[Option[T]]
+      } catch {
+        case e: Exception ⇒
+          throw new Exception(s"SonicMessage#getOptional: unexpected type for $key: $field")
       }
-      case Some(`ack`) ⇒ ClientAcknowledge
-      case Some(`started`) ⇒ StreamStarted(vari.get)
-      case Some(`cancel`) ⇒ CancelStream
-      case Some(`auth`) ⇒
-        val fields = pay.get.asJsObject.fields
+    }
+  }
+
+  def fromJson(raw: String): SonicMessage = {
+    val fields: Map[String, JsValue] = raw.parseJson.asJsObject.fields
+
+    getField[String](eventType, fields) match {
+      case `out` ⇒ OutputChunk(getField[JsArray](payload, fields))
+      case `ack` ⇒ ClientAcknowledge
+      case `started` ⇒ StreamStarted(getField[String](variation, fields))
+      case `cancel` ⇒ CancelStream
+      case `auth` ⇒
+        val p = getField[Map[String, JsValue]](payload, fields)
         Authenticate(
-          fields("user").convertTo[String],
-          vari.get,
-          fields.get("trace_id").flatMap(_.convertTo[Option[String]]))
-      case Some(`meta`) ⇒
-        pay match {
-          case Some(d: JsArray) ⇒ TypeMetadata(d.convertTo[Vector[(String, JsValue)]])
-          case Some(j: JsObject) ⇒ TypeMetadata(j.convertTo[Vector[(String, JsValue)]])
-          case a ⇒ throw new Exception(s"expecting JsArray found $a")
+          getField[String]("user", p),
+          getField[String](variation, fields),
+          getOptional[String]("trace_id", p))
+      case `meta` ⇒
+        getField[JsValue](payload, fields) match {
+          case d: JsArray ⇒ TypeMetadata(d.convertTo[Vector[(String, JsValue)]])
+          case j: JsObject ⇒ TypeMetadata(j.convertTo[Vector[(String, JsValue)]])
+          case a ⇒ throw new Exception(s"SonicMessage#fromJson: expecting JsArray or JsObject found $a")
         }
-      case Some(`progress`) ⇒
-        val fields = pay.get.asJsObject.fields
-        QueryProgress(
-          fields("s").convertTo[Int],
-          fields("p").convertTo[Double],
-          Try(fields.get("t").flatMap(_.convertTo[Option[Double]])).toOption.flatten,
-          Try(fields.get("u").flatMap(_.convertTo[Option[String]])).toOption.flatten
+      case `progress` ⇒
+        val p = getField[Map[String, JsValue]](payload, fields)
+        QueryProgress(getField[Int]("s", p), getField[Double]("p", p),
+          getOptional[Double]("t", p), getOptional[String]("u", p))
+      case `query` ⇒
+        val p = getField[Map[String, JsValue]](payload, fields)
+        val traceId = getOptional[String]("trace_id", p)
+        val auth = getOptional[AuthConfig]("auth", p)
+        new Query(None, traceId, auth, getField[String](variation, fields), p("config"))
+      case `completed` ⇒
+        val p = getField[Map[String, JsValue]](payload, fields)
+        StreamCompleted(getField[String]("trace_id", p),
+          getOptional[String](variation, fields).map(fromStackTrace)
         )
-      case Some(`query`) ⇒
-        val p = pay.get.asJsObject.fields
-        val traceId = p.get("trace_id").flatMap(_.convertTo[Option[String]])
-        val auth = p.get("auth") flatMap (_.convertTo[Option[AuthConfig]])
-        new Query(None, traceId, auth, vari.get, p("config"))
-      case Some(`completed`) ⇒ StreamCompleted(pay.get.asJsObject.fields("trace_id").convertTo[String], vari.map(fromStackTrace))
-      case Some(e) ⇒ throw new Exception(s"unexpected event type '$e'")
-      case None ⇒ throw new Exception("no 'e' event_type")
+      case e ⇒ throw new Exception(s"unexpected event type '$e'")
     }
   }
 
@@ -242,7 +257,7 @@ object Query {
     * Build a Query from a fully specified source configuration 'config'
     */
   def apply(query: String, config: JsObject, auth: Option[AuthConfig]): Query =
-  new Query(None, None, auth, query, config)
+    new Query(None, None, auth, query, config)
 
   def apply(query: String, config: JsObject, traceId: String, auth: Option[AuthConfig]): Query =
     new Query(None, Some(traceId), auth, query, config)
@@ -252,7 +267,7 @@ object Query {
     * load from its configuration
     */
   def apply(query: String, config: JsString, auth: Option[AuthConfig]): Query =
-  new Query(None, None, auth, query, config)
+    new Query(None, None, auth, query, config)
 
   def apply(query: String, config: JsString, traceId: String, auth: Option[AuthConfig]): Query =
     new Query(None, Some(traceId), auth, query, config)
