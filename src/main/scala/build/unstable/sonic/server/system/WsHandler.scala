@@ -116,36 +116,39 @@ class WsHandler(controller: ActorRef, clientAddress: Option[InetAddress]) extend
       log.error(e, msg)
       context.become(completing(StreamCompleted.error(traceId, e)))
 
-    case msg@OnError(NonFatal(e)) ⇒
-      log.warning("ws stream error {}", e)
-      context.become(completing(StreamCompleted.error(traceId, e)))
-
     case msg@OnError(e) ⇒
-      log.error(e, "ws stream fatal error")
+      log.error(e, "ws stream error")
       onErrorThenStop(e)
-
   }
 
   // 4
   def completing(done: StreamCompleted): Receive = stashCommands orElse {
-    log.debug("switched to closing behaviour with ev {}", done)
+    log.debug("completing with ev {}", done)
     val recv: Receive = {
       case ActorPublisherMessage.Cancel | ActorSubscriberMessage.OnComplete ⇒
+        log.debug("completing: received Cancel || OnComplete {}", done.traceId)
         onComplete()
         context.stop(self)
       case UpstreamCompleted ⇒ //expected, overrides commonBehaviour
-      case OnNext(ClientAcknowledge) ⇒ restartInternally()
+        log.debug("completing: UpstreamCompleted {}", done.traceId)
+      case OnNext(ClientAcknowledge) ⇒
+        log.debug("completing: received ack {}", done.traceId)
+        restartInternally()
       //this can only happen if cancel was sent between props and subscription
       case s: Subscription ⇒ s.cancel()
+        log.debug("completing: received subscription {}: {}", s, done.traceId)
     }
 
     if (isActive && totalDemand > 0) {
+      log.debug("completing stream with ev {}", done)
       onNext(done)
       stashCommands orElse recv orElse commonBehaviour orElse {
-        case Request(_) ⇒ //ignore
+        case Request(n) ⇒ //ignore
+          log.debug("client request of {} but waiting for ack...", n)
       }
     } else stashCommands orElse recv orElse commonBehaviour orElse {
       case Request(n) =>
+        log.debug("Request: completing stream with ev {}", done)
         onNext(done)
         context.become(stashCommands orElse recv orElse commonBehaviour)
     }
