@@ -3,6 +3,7 @@ package build.unstable.sonic.server.http
 import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.http.scaladsl.model.RemoteAddress
 import akka.http.scaladsl.model.ws.{Message, TextMessage}
+import akka.http.scaladsl.server
 import akka.http.scaladsl.server.Directives._
 import akka.stream._
 import akka.stream.actor.{ActorPublisher, ActorSubscriber}
@@ -18,9 +19,9 @@ class QueryEndpoint(controller: ActorRef, responseTimeout: Timeout, actorTimeout
 
   implicit val t: Timeout = responseTimeout
 
-  def wsFlowHandler(clientAddress: RemoteAddress): Flow[SonicMessage, SonicMessage, Any] = {
+  def wsFlowHandler(clientAddress: Option[RemoteAddress]): Flow[SonicMessage, SonicMessage, Any] = {
+    val wsHandler = system.actorOf(Props(classOf[WsHandler], controller, clientAddress))
 
-    val wsHandler = system.actorOf(Props(classOf[WsHandler], controller, clientAddress.toOption))
     Flow.fromSinkAndSource[SonicMessage, SonicMessage](
       Sink.fromSubscriber(ActorSubscriber(wsHandler)),
       Source.fromPublisher[SonicMessage](ActorPublisher(wsHandler))
@@ -45,7 +46,7 @@ class QueryEndpoint(controller: ActorRef, responseTimeout: Timeout, actorTimeout
     *           +------------------------------------------+
     * }}}
     */
-  def messageSerDe(clientAddress: RemoteAddress): Flow[Message, Message, Any] = {
+  def messageSerDe(clientAddress: Option[RemoteAddress]): Flow[Message, Message, Any] = {
     Flow.fromGraph(GraphDSL.create() { implicit b ⇒
       import GraphDSL.Implicits._
 
@@ -69,21 +70,24 @@ class QueryEndpoint(controller: ActorRef, responseTimeout: Timeout, actorTimeout
     })
   }
 
+  def process(ip: Option[RemoteAddress]): server.Route = {
+    extractUpgradeToWebSocket { upgrade ⇒
+      complete {
+        upgrade.handleMessages(messageSerDe(ip).recover {
+          case e: Exception ⇒
+            TextMessage(StreamCompleted.error("no-trace-id", e).json.toString())
+        })
+      }
+    }
+  }
+
   val route =
     get {
       path("query") {
         pathEndOrSingleSlash {
           cors() {
             instrumentRoute(HandleExtractWebSocketUpgrade, None) { _ ⇒
-              extractClientIP { ip ⇒
-                extractUpgradeToWebSocket { upgrade ⇒
-                  complete {
-                    upgrade.handleMessages(messageSerDe(ip).recover {
-                      case e: Exception ⇒ TextMessage(StreamCompleted.error("no-trace-id", e).json.toString())
-                    })
-                  }
-                }
-              }
+              extractClientIP(ip ⇒ process(Some(ip))) ~ process(None)
             }
           }
         }
